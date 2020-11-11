@@ -130,6 +130,24 @@ class SettingsDialog(WindowModalDialog):
         # lightning
         lightning_widgets = []
 
+        help_trampoline = _("""If this option is disabled, Electrum will download the network
+channels graph and compute payment path locally, instead of using trampoline payments. """)
+        trampoline_cb = QCheckBox(_("Use trampoline routing"))
+        trampoline_cb.setToolTip(help_trampoline)
+        trampoline_cb.setChecked(bool(self.config.get('use_trampoline', True)))
+        def on_trampoline_checked(x):
+            use_trampoline = bool(x)
+            self.config.set_key('use_trampoline', use_trampoline)
+            if not use_trampoline:
+                self.window.network.start_gossip()
+            else:
+                self.window.network.stop_gossip()
+            util.trigger_callback('ln_gossip_sync_progress')
+            # FIXME: update all wallet windows
+            util.trigger_callback('channels_updated', self.wallet)
+        trampoline_cb.stateChanged.connect(on_trampoline_checked)
+        lightning_widgets.append((trampoline_cb, None))
+
         help_local_wt = _("""If this option is checked, Electrum will
 run a local watchtower and protect your channels even if your wallet is not
 open. For this to work, your computer needs to be online regularly.""")

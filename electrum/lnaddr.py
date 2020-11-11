@@ -214,6 +214,10 @@ def lnencode(addr: 'LnAddr', privkey) -> str:
                 pubkey, channel, feebase, feerate, cltv = step
                 route.append(bitstring.BitArray(pubkey) + bitstring.BitArray(channel) + bitstring.pack('intbe:32', feebase) + bitstring.pack('intbe:32', feerate) + bitstring.pack('intbe:16', cltv))
             data += tagged('r', route)
+        elif k == 't':
+            pubkey, feebase, feerate, cltv = v
+            route = bitstring.BitArray(pubkey) + bitstring.pack('intbe:32', feebase) + bitstring.pack('intbe:32', feerate) + bitstring.pack('intbe:16', cltv)
+            data += tagged('t', route)
         elif k == 'f':
             data += encode_fallback(v, addr.currency)
         elif k == 'd':
@@ -281,6 +285,16 @@ class LnAddr(object):
         if self.amount is None:
             return None
         return self.amount * COIN
+
+    def get_routing_info(self, tag):
+        import random
+        r_tags = list(filter(lambda x: x[0] == tag, self.tags))
+        # strip the tag type, it's implicitly 'r' now
+        r_tags = list(map(lambda x: x[1], r_tags))
+        # if there are multiple hints, we will use the first one that works,
+        # from a random permutation
+        random.shuffle(r_tags)
+        return r_tags
 
     def get_amount_msat(self) -> Optional[int]:
         if self.amount is None:
@@ -398,6 +412,13 @@ def lndecode(invoice: str, *, verbose=False, expected_hrp=None) -> LnAddr:
                               s.read(32).uintbe,
                               s.read(16).uintbe))
             addr.tags.append(('r',route))
+        elif tag == 't':
+            s = bitstring.ConstBitStream(tagdata)
+            e = (s.read(264).tobytes(),
+                 s.read(32).uintbe,
+                 s.read(32).uintbe,
+                 s.read(16).uintbe)
+            addr.tags.append(('t', e))
         elif tag == 'f':
             fallback = parse_fallback(tagdata, addr.currency)
             if fallback:
